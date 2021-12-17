@@ -1,8 +1,7 @@
-[templates, rules] = File.read!("./input.txt")
+[[template], rules] = File.read!("./input0.txt")
   |> String.split("\n\n")
   |> Enum.map(fn line -> String.split(line, "\n") end)
 
-[template] = templates
 rule_map =
   rules
   |> Enum.reduce(%{}, fn rule, map ->
