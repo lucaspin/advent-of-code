@@ -13,58 +13,45 @@ type Record struct {
 	Blocks []int
 }
 
-func replace(line []string, index int, s string) []string {
-	new := []string{}
-	new = append(new, line[0:index]...)
-	new = append(new, s)
-	new = append(new, line[index+1:]...)
-	return new
-}
+func (r *Record) Find(cache map[string]int, line string, blocks []int, lineIndex, blockIndex, blockCount int) int {
+	key := fmt.Sprintf("i=%d;bi=%d;bc=%d", lineIndex, blockIndex, blockCount)
+	if v, ok := cache[key]; ok {
+		return v
+	}
 
-func (r *Record) Find(arrangements *[]string, line []string, blocks []int, lineIndex, blockIndex, blockCount int) {
 	if lineIndex == len(line) {
 		if blockIndex == len(blocks)-1 && blocks[blockIndex] == blockCount {
-			*arrangements = append(*arrangements, strings.Join(line, ""))
+			return 1
 		} else if blockIndex == len(blocks) && blockCount == 0 {
-			*arrangements = append(*arrangements, strings.Join(line, ""))
-		} else {
+			return 1
 		}
 
-		return
+		return 0
 	}
 
-	if line[lineIndex] == "?" {
-		r.Find(arrangements, replace(line, lineIndex, "."), blocks, lineIndex, blockIndex, blockCount)
-		r.Find(arrangements, replace(line, lineIndex, "#"), blocks, lineIndex, blockIndex, blockCount)
-		return
-	}
-
-	if line[lineIndex] == "." {
-		if blockCount == 0 {
-			r.Find(arrangements, line, blocks, lineIndex+1, blockIndex, 0)
-			return
-		}
-
-		if blockIndex < len(blocks) && blockCount == blocks[blockIndex] {
-			r.Find(arrangements, line, blocks, lineIndex+1, blockIndex+1, 0)
-			return
+	count := 0
+	for _, c := range []byte{'.', '#'} {
+		if line[lineIndex] == c || line[lineIndex] == '?' {
+			if c == '.' && blockCount == 0 {
+				count += r.Find(cache, line, blocks, lineIndex+1, blockIndex, blockCount)
+			} else if c == '.' && blockCount > 0 && blockIndex < len(blocks) && blocks[blockIndex] == blockCount {
+				count += r.Find(cache, line, blocks, lineIndex+1, blockIndex+1, 0)
+			} else if c == '#' {
+				count += r.Find(cache, line, blocks, lineIndex+1, blockIndex, blockCount+1)
+			}
 		}
 	}
 
-	if line[lineIndex] == "#" {
-		r.Find(arrangements, line, blocks, lineIndex+1, blockIndex, blockCount+1)
-		return
-	}
+	cache[key] = count
+	return count
 }
 
-func (r *Record) FindArrangements() []string {
-	arrangements := []string{}
-	r.Find(&arrangements, strings.Split(r.Line, ""), r.Blocks, 0, 0, 0)
-	return arrangements
+func (r *Record) FindArrangements() int {
+	var cache = map[string]int{}
+	return r.Find(cache, r.Line, r.Blocks, 0, 0, 0)
 }
 
-// NOTE: don't call this, it takes FOREVER to run.
-func (r *Record) FindArrangementsExpanded() []string {
+func (r *Record) FindArrangementsExpanded() int {
 	newLine := ""
 	newBlocks := []int{}
 	for i := 0; i < 5; i++ {
@@ -78,11 +65,8 @@ func (r *Record) FindArrangementsExpanded() []string {
 		newBlocks = append(newBlocks, r.Blocks...)
 	}
 
-	fmt.Printf("After expansion: %s, %v\n", newLine, newBlocks)
-
-	arrangements := []string{}
-	r.Find(&arrangements, strings.Split(newLine, ""), newBlocks, 0, 0, 0)
-	return arrangements
+	var cache = map[string]int{}
+	return r.Find(cache, newLine, newBlocks, 0, 0, 0)
 }
 
 func A(input string) int {
@@ -90,8 +74,8 @@ func A(input string) int {
 	for _, record := range parseRecords(input) {
 		fmt.Printf("Going through record %s\n", record.Line)
 		arrangements := record.FindArrangements()
-		fmt.Printf("Arrangements: %d\n", len(arrangements))
-		result += len(arrangements)
+		fmt.Printf("Arrangements: %d\n", arrangements)
+		result += arrangements
 	}
 
 	return result
@@ -102,9 +86,8 @@ func B(input string) int {
 	for _, record := range parseRecords(input) {
 		fmt.Printf("Going through record %s\n", record.Line)
 		arrangements := record.FindArrangementsExpanded()
-		fmt.Printf("Arrangements: %d\n", len(arrangements))
-		// fmt.Printf("%v\n", arrangements[0:100])
-		result += len(arrangements)
+		fmt.Printf("Arrangements: %d\n", arrangements)
+		result += arrangements
 	}
 
 	return result
