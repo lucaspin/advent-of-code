@@ -16,7 +16,7 @@ type Record struct {
 func replace(line []string, index int, s string) []string {
 	new := []string{}
 	new = append(new, line[0:index]...)
-	new = append(new, ".")
+	new = append(new, s)
 	new = append(new, line[index+1:]...)
 	return new
 }
