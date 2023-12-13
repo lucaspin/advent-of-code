@@ -12,6 +12,6 @@ func Test__SolutionA(t *testing.T) {
 }
 
 func Test__SolutionB(t *testing.T) {
-	// require.Equal(t, 400, B("example.txt"))
-	// require.Equal(t, 37718, A("input.txt"))
+	require.Equal(t, 400, B("example.txt"))
+	require.Equal(t, 40995, B("input.txt"))
 }
