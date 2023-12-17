@@ -1,7 +1,6 @@
 package pkg202317
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/lucaspin/computer-science/pkg/binary_heap"
@@ -55,126 +54,179 @@ func (g *Graph) AllNodes() []string {
 	return s
 }
 
-func (g *Graph) ShortestPathModified(start, end string) (int, []string) {
-	allNodes := g.AllNodes()
+type StringSet map[string]bool
 
-	// build initial tentative distances map
-	distances := map[string]int{}
-	previous := map[string]string{}
-	for _, v := range allNodes {
-		distances[v] = math.MaxInt32 // infinite
-	}
-	distances[start] = 0
+func (s *StringSet) Has(v string) bool {
+	_, ok := (*s)[v]
+	return ok
+}
 
-	type N struct {
-		ID             string
-		Value          int
-		Direction      string
-		DirectionCount int
-	}
+func (s *StringSet) Add(v string) {
+	(*s)[v] = true
+}
 
-	unvisited := binary_heap.NewBinaryHeap[N]([]N{}, func(a, b N) bool { return a.Value < b.Value })
-	for _, k := range allNodes {
-		unvisited.Push(N{ID: k, Value: distances[k]})
-	}
+type NSet map[N]bool
 
-	// iterate until there are no unvisited nodes
-	for unvisited.Len() > 0 {
-		// Pick the next node, which will be the unvisited node with the minimum difference.
-		current := unvisited.Pop()
+func (n *NSet) Has(v N) bool {
+	_, ok := (*n)[v]
+	return ok
+}
 
-		// Same node can be added to the queue multiple times.
-		// We are only interested on the smallest known distance for each node,
-		// so we ignore it if it's greater than the current known smallest difference.
-		if current.Value > distances[current.ID] {
-			continue
-		}
-
-		fmt.Printf("current=%s count=%d dir=%s\n", current.ID, current.DirectionCount, current.Direction)
-		node := g.Get(current.ID)
-
-		// update distances for each adjacent node for the current node
-		for _, e := range node.Edges {
-			if current.Direction == e.Direction && current.DirectionCount >= 2 {
-				fmt.Printf("%s -> %s - ignoring due to count=%d\n", current.ID, e.Destination, current.DirectionCount)
-				continue
-			}
-
-			fmt.Printf("%s -> %s - OK\n", current.ID, e.Destination)
-			dist := distances[current.ID] + e.Weight
-			if dist < distances[e.Destination] {
-				var dCount int
-				if current.Direction == e.Direction {
-					dCount = current.DirectionCount + 1
-				} else {
-					dCount = 0
-				}
-
-				distances[e.Destination] = dist
-				previous[e.Destination] = node.ID
-				unvisited.Push(N{
-					ID:             e.Destination,
-					Value:          dist,
-					Direction:      e.Direction,
-					DirectionCount: dCount,
-				})
-			}
-		}
-	}
-
-	path := []string{}
-	for i := end; i != start; {
-		path = append(path, i)
-		i = previous[i]
-	}
-
-	return distances[end], path
+func (n *NSet) Add(v N) {
+	(*n)[v] = true
 }
 
 func (g *Graph) ShortestPath(start, end string) int {
-	allNodes := g.AllNodes()
-
-	// build initial tentative distances map
-	distances := map[string]int{}
-	for _, v := range allNodes {
-		distances[v] = math.MaxInt32 // infinite
-	}
-	distances[start] = 0
-
 	type N struct {
 		ID    string
 		Value int
 	}
 
-	unvisited := binary_heap.NewBinaryHeap[N]([]N{}, func(a, b N) bool { return a.Value < b.Value })
-	for _, k := range allNodes {
-		unvisited.Push(N{ID: k, Value: distances[k]})
-	}
+	distances := map[string]int{}
+	distances[start] = 0
 
-	// iterate until there are no unvisited nodes
-	for unvisited.Len() > 0 {
-		// Pick the next node, which will be the unvisited node with the minimum difference.
-		current := unvisited.Pop()
+	queue := binary_heap.NewBinaryHeap[N]([]N{}, func(a, b N) bool { return a.Value < b.Value })
+	queue.Push(N{ID: start, Value: distances[start]})
 
-		// Same node can be added to the queue multiple times.
-		// We are only interested on the smallest known distance for each node,
-		// so we ignore it if it's greater than the current known smallest difference.
+	visited := StringSet{}
+
+	for queue.Len() > 0 {
+		current := queue.Pop()
 		if current.Value > distances[current.ID] {
 			continue
 		}
 
-		fmt.Printf("current=%s unvisited=%d\n", current.ID, unvisited.Len())
-		node := g.Get(current.ID)
+		if visited.Has(current.ID) {
+			continue
+		}
+
+		visited.Add(current.ID)
 
 		// update distances for each adjacent node for the current node
-		for _, e := range node.Edges {
+		for _, e := range g.Get(current.ID).Edges {
 			dist := distances[current.ID] + e.Weight
-			if dist < distances[e.Destination] {
+			if v, ok := distances[e.Destination]; ok {
+				if dist < v {
+					distances[e.Destination] = dist
+					queue.Push(N{ID: e.Destination, Value: dist})
+				}
+			} else {
 				distances[e.Destination] = dist
-				unvisited.Push(N{ID: e.Destination, Value: dist})
+				queue.Push(N{ID: e.Destination, Value: dist})
 			}
 		}
 	}
 
 	return distances[end]
+}
+
+type N struct {
+	ID             string
+	Direction      string
+	DirectionCount int
+}
+
+func (g *Graph) ShortestPathModified(start, end string) int {
+	n0 := N{
+		ID:             start,
+		Direction:      "east",
+		DirectionCount: 0,
+	}
+
+	n1 := N{
+		ID:             start,
+		Direction:      "south",
+		DirectionCount: 0,
+	}
+
+	distances := map[N]int{}
+	distances[n0] = 0
+	distances[n1] = 0
+
+	queue := binary_heap.NewBinaryHeap[N]([]N{}, func(a, b N) bool { return distances[a] < distances[b] })
+	queue.Push(n0)
+	queue.Push(n1)
+
+	visited := NSet{}
+
+	for queue.Len() > 0 {
+		current := queue.Pop()
+		if visited.Has(*current) {
+			continue
+		}
+
+		visited.Add(*current)
+
+		// update distances for each adjacent node for the current node
+		for _, e := range filter(g.Get(current.ID).Edges, *current) {
+			dist := distances[*current] + e.Weight
+			n := buildN(*current, e)
+
+			if v, ok := distances[n]; ok {
+				if dist < v {
+					distances[n] = dist
+					queue.Push(n)
+				}
+			} else {
+				distances[n] = dist
+				queue.Push(n)
+			}
+		}
+	}
+
+	return min(distances, end)
+}
+
+func filter(edges []Edge, current N) []Edge {
+	es := []Edge{}
+	for _, e := range edges {
+		switch e.Direction {
+		case "south":
+			if current.Direction == "east" || current.Direction == "west" || (current.Direction == "south" && current.DirectionCount < 3) {
+				es = append(es, e)
+			}
+		case "north":
+			if current.Direction == "east" || current.Direction == "west" || (current.Direction == "north" && current.DirectionCount < 3) {
+				es = append(es, e)
+			}
+		case "east":
+			if current.Direction == "north" || current.Direction == "south" || (current.Direction == "east" && current.DirectionCount < 3) {
+				es = append(es, e)
+			}
+		case "west":
+			if current.Direction == "north" || current.Direction == "south" || (current.Direction == "west" && current.DirectionCount < 3) {
+				es = append(es, e)
+			}
+		}
+	}
+
+	return es
+}
+
+func min(distances map[N]int, ID string) int {
+	min := math.MaxInt32
+	for k, v := range distances {
+		if k.ID == ID {
+			if v < min {
+				min = v
+			}
+		}
+	}
+
+	return min
+}
+
+func buildN(current N, e Edge) N {
+	n := N{
+		ID:        e.Destination,
+		Direction: e.Direction,
+	}
+
+	if current.Direction == e.Direction {
+		n.DirectionCount = current.DirectionCount + 1
+	} else {
+		n.DirectionCount = 1
+	}
+
+	return n
 }

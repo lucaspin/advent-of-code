@@ -19,17 +19,8 @@ func A(input string) int {
 	start := "0-0"
 	end := fmt.Sprintf("%d-%d", len(grid)-1, len(grid[0])-1)
 	fmt.Printf("start=%s end=%s\n", start, end)
-	ans, path := graph.ShortestPathModified(start, end)
-	fmt.Printf("Path: %v\n", reverse(path))
+	ans := graph.ShortestPathModified(start, end)
 	return ans
-}
-
-func reverse(path []string) []string {
-	r := make([]string, len(path))
-	for i := len(path) - 1; i >= 0; i-- {
-		r = append(r, path[i])
-	}
-	return r
 }
 
 func parseGrid(input string) [][]string {
@@ -63,7 +54,7 @@ func edgesForNode(grid [][]string, row, col int) []Edge {
 		edges = append(edges, Edge{
 			Destination: fmt.Sprintf("%d-%d", row-1, col),
 			Weight:      toInt(grid[row-1][col]),
-			Direction:   "UP",
+			Direction:   "north",
 		})
 	}
 
@@ -71,7 +62,7 @@ func edgesForNode(grid [][]string, row, col int) []Edge {
 		edges = append(edges, Edge{
 			Destination: fmt.Sprintf("%d-%d", row+1, col),
 			Weight:      toInt(grid[row+1][col]),
-			Direction:   "DOWN",
+			Direction:   "south",
 		})
 	}
 
@@ -79,7 +70,7 @@ func edgesForNode(grid [][]string, row, col int) []Edge {
 		edges = append(edges, Edge{
 			Destination: fmt.Sprintf("%d-%d", row, col-1),
 			Weight:      toInt(grid[row][col-1]),
-			Direction:   "LEFT",
+			Direction:   "west",
 		})
 	}
 
@@ -87,7 +78,7 @@ func edgesForNode(grid [][]string, row, col int) []Edge {
 		edges = append(edges, Edge{
 			Destination: fmt.Sprintf("%d-%d", row, col+1),
 			Weight:      toInt(grid[row][col+1]),
-			Direction:   "RIGHT",
+			Direction:   "east",
 		})
 	}
 
