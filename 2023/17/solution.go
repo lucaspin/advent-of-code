@@ -19,7 +19,23 @@ func A(input string) int {
 	start := "0-0"
 	end := fmt.Sprintf("%d-%d", len(grid)-1, len(grid[0])-1)
 	fmt.Printf("start=%s end=%s\n", start, end)
-	ans := graph.ShortestPathModified(start, end)
+	ans := graph.ShortestPathModified(start, end, false)
+	return ans
+}
+
+func B(input string) int {
+	data, err := os.ReadFile(input)
+	if err != nil {
+		panic(err)
+	}
+
+	grid := parseGrid(string(data))
+	graph := buildGraph(grid)
+
+	start := "0-0"
+	end := fmt.Sprintf("%d-%d", len(grid)-1, len(grid[0])-1)
+	fmt.Printf("start=%s end=%s\n", start, end)
+	ans := graph.ShortestPathModified(start, end, true)
 	return ans
 }
 

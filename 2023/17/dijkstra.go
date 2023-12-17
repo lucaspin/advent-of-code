@@ -126,7 +126,7 @@ type N struct {
 	DirectionCount int
 }
 
-func (g *Graph) ShortestPathModified(start, end string) int {
+func (g *Graph) ShortestPathModified(start, end string, part2 bool) int {
 	n0 := N{
 		ID:             start,
 		Direction:      "east",
@@ -158,7 +158,7 @@ func (g *Graph) ShortestPathModified(start, end string) int {
 		visited.Add(*current)
 
 		// update distances for each adjacent node for the current node
-		for _, e := range filter(g.Get(current.ID).Edges, *current) {
+		for _, e := range filter(g.Get(current.ID).Edges, *current, part2) {
 			dist := distances[*current] + e.Weight
 			n := buildN(*current, e)
 
@@ -174,10 +174,58 @@ func (g *Graph) ShortestPathModified(start, end string) int {
 		}
 	}
 
-	return min(distances, end)
+	return min(distances, end, part2)
 }
 
-func filter(edges []Edge, current N) []Edge {
+func filterForPart2(edges []Edge, current N) []Edge {
+	es := []Edge{}
+	for _, e := range edges {
+		switch e.Direction {
+		case "south":
+			if current.Direction == "south" {
+				if current.DirectionCount < 10 {
+					es = append(es, e)
+				}
+			} else if current.Direction != "north" && current.DirectionCount >= 4 {
+				es = append(es, e)
+			}
+		case "north":
+			if current.Direction == "north" {
+				if current.DirectionCount < 10 {
+					es = append(es, e)
+				}
+			} else if current.Direction != "south" && current.DirectionCount >= 4 {
+				es = append(es, e)
+			}
+		case "east":
+			if current.Direction == "east" {
+				if current.DirectionCount < 10 {
+					es = append(es, e)
+				}
+			} else if current.Direction != "west" && current.DirectionCount >= 4 {
+				es = append(es, e)
+			}
+		case "west":
+			if current.Direction == "west" {
+				if current.DirectionCount < 10 {
+					es = append(es, e)
+				}
+			} else if current.Direction != "east" && current.DirectionCount >= 4 {
+				es = append(es, e)
+			}
+		}
+	}
+
+	// fmt.Printf("current=%v edges=%v\n", current, es)
+
+	return es
+}
+
+func filter(edges []Edge, current N, part2 bool) []Edge {
+	if part2 {
+		return filterForPart2(edges, current)
+	}
+
 	es := []Edge{}
 	for _, e := range edges {
 		switch e.Direction {
@@ -203,7 +251,20 @@ func filter(edges []Edge, current N) []Edge {
 	return es
 }
 
-func min(distances map[N]int, ID string) int {
+func min(distances map[N]int, ID string, part2 bool) int {
+	if part2 {
+		min := math.MaxInt32
+		for k, v := range distances {
+			if k.ID == ID && k.DirectionCount >= 4 {
+				if v < min {
+					min = v
+				}
+			}
+		}
+
+		return min
+	}
+
 	min := math.MaxInt32
 	for k, v := range distances {
 		if k.ID == ID {
