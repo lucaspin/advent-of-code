@@ -2,7 +2,10 @@ module github.com/lucaspin/advent-of-code
 
 go 1.21.4
 
-require github.com/stretchr/testify v1.8.4
+require (
+	github.com/lucaspin/computer-science v0.0.0-20230109125015-6df878776167
+	github.com/stretchr/testify v1.8.4
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
