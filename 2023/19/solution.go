@@ -41,6 +41,79 @@ func (s *System) IsAccepted(part Part) bool {
 	return current == "A"
 }
 
+func copyRules(current []WorkflowRule, new *WorkflowRule, before ...WorkflowRule) []WorkflowRule {
+	c := make([]WorkflowRule, len(current))
+	copy(c, current)
+	c = append(c, before...)
+
+	if new != nil {
+		c = append(c, *new)
+	}
+
+	return c
+}
+
+func (s *System) findAcceptedRules(allConditions *[][]WorkflowRule, currentCondition []WorkflowRule, workflow Workflow) {
+	for ruleIndex, rule := range workflow.Rules {
+		if rule.Target == "R" {
+			continue
+		}
+
+		if rule.Target == "A" {
+			if ruleIndex == 0 {
+				*allConditions = append(
+					*allConditions,
+					copyRules(currentCondition, &rule),
+				)
+			} else {
+				*allConditions = append(
+					*allConditions,
+					copyRules(currentCondition, &rule, negateRules(workflow.Rules[0:ruleIndex])...),
+				)
+			}
+			continue
+		}
+
+		if ruleIndex == 0 {
+			if rule.Condition == "" {
+				s.findAcceptedRules(allConditions, currentCondition, s.FindWorkflowByName(rule.Target))
+			} else {
+				s.findAcceptedRules(
+					allConditions,
+					copyRules(currentCondition, &rule),
+					s.FindWorkflowByName(rule.Target),
+				)
+			}
+		} else {
+			if rule.Condition == "" {
+				s.findAcceptedRules(
+					allConditions,
+					copyRules(currentCondition, nil, negateRules(workflow.Rules[0:ruleIndex])...),
+					s.FindWorkflowByName(rule.Target),
+				)
+			} else {
+				s.findAcceptedRules(
+					allConditions,
+					copyRules(currentCondition, &rule, negateRules(workflow.Rules[0:ruleIndex])...),
+					s.FindWorkflowByName(rule.Target),
+				)
+			}
+		}
+	}
+}
+
+func negateRules(rules []WorkflowRule) []WorkflowRule {
+	negated := []WorkflowRule{}
+
+	for _, r := range rules {
+		if r.Condition != "" {
+			negated = append(negated, r.Negate())
+		}
+	}
+
+	return negated
+}
+
 func (s *System) Accepted() []Part {
 	accepted := []Part{}
 
@@ -88,6 +161,25 @@ type WorkflowRule struct {
 	Target    string
 }
 
+func (r *WorkflowRule) Negate() WorkflowRule {
+	switch r.Condition {
+	case ">":
+		return WorkflowRule{
+			Variable:  r.Variable,
+			Condition: "<",
+			Value:     r.Value + 1,
+		}
+	case "<":
+		return WorkflowRule{
+			Variable:  r.Variable,
+			Condition: ">",
+			Value:     r.Value - 1,
+		}
+	}
+
+	return *r
+}
+
 func (r *WorkflowRule) Apply(part Part) bool {
 	switch r.Condition {
 	case ">":
@@ -121,6 +213,61 @@ func (p *Part) Get(name string) int {
 	panic(fmt.Errorf("variable %s does not exist", name))
 }
 
+type PartRange struct {
+	X Range
+	M Range
+	A Range
+	S Range
+}
+
+func (pr *PartRange) Apply(rule WorkflowRule) {
+	switch rule.Condition {
+	case "<":
+		pr.AdjustRight(rule)
+	case ">":
+		pr.AdjustLeft(rule)
+	}
+}
+
+func (pr *PartRange) AdjustRight(rule WorkflowRule) {
+	switch rule.Variable {
+	case "s":
+		pr.S.RightInclusive = rule.Value - 1
+	case "x":
+		pr.X.RightInclusive = rule.Value - 1
+	case "a":
+		pr.A.RightInclusive = rule.Value - 1
+	case "m":
+		pr.M.RightInclusive = rule.Value - 1
+	}
+}
+
+func (pr *PartRange) AdjustLeft(rule WorkflowRule) {
+	switch rule.Variable {
+	case "s":
+		pr.S.LeftInclusive = rule.Value + 1
+	case "x":
+		pr.X.LeftInclusive = rule.Value + 1
+	case "a":
+		pr.A.LeftInclusive = rule.Value + 1
+	case "m":
+		pr.M.LeftInclusive = rule.Value + 1
+	}
+}
+
+func (pr *PartRange) Combinations() int64 {
+	return pr.A.Combinations() * pr.X.Combinations() * pr.M.Combinations() * pr.S.Combinations()
+}
+
+type Range struct {
+	LeftInclusive  int
+	RightInclusive int
+}
+
+func (r *Range) Combinations() int64 {
+	return int64(r.RightInclusive) - int64(r.LeftInclusive) + 1
+}
+
 func A(input string) int {
 	d, err := os.ReadFile(input)
 	if err != nil {
@@ -129,6 +276,36 @@ func A(input string) int {
 
 	system := parseSystem(string(d))
 	return system.SumAccepted()
+}
+
+func B(input string) int64 {
+	d, err := os.ReadFile(input)
+	if err != nil {
+		panic(err)
+	}
+
+	system := parseSystem(string(d))
+
+	allConditions := [][]WorkflowRule{}
+	system.findAcceptedRules(&allConditions, []WorkflowRule{}, system.FindWorkflowByName("in"))
+
+	total := int64(0)
+	for _, c := range allConditions {
+		pr := &PartRange{
+			X: Range{LeftInclusive: 1, RightInclusive: 4000},
+			S: Range{LeftInclusive: 1, RightInclusive: 4000},
+			M: Range{LeftInclusive: 1, RightInclusive: 4000},
+			A: Range{LeftInclusive: 1, RightInclusive: 4000},
+		}
+
+		for _, r := range c {
+			pr.Apply(r)
+		}
+
+		total += pr.Combinations()
+	}
+
+	return total
 }
 
 func parseSystem(input string) *System {
