@@ -43,7 +43,7 @@ type queueItem struct {
 	Pulse PulseType
 }
 
-func (r *ModuleRegistry) Send(q queue) (int64, int64) {
+func (r *ModuleRegistry) Send(q queue, cycles map[string]int64, module string, presses int64) (int64, int64) {
 	lowPulses := int64(0)
 	highPulses := int64(0)
 
@@ -53,6 +53,12 @@ func (r *ModuleRegistry) Send(q queue) (int64, int64) {
 			highPulses++
 		} else {
 			lowPulses++
+		}
+
+		if cycles != nil {
+			if item.To == module && item.Pulse == PulseTypeHigh {
+				cycles[item.From] = presses
+			}
 		}
 
 		m := r.Modules[item.To]
@@ -74,7 +80,13 @@ func (r *ModuleRegistry) Send(q queue) (int64, int64) {
 func (r *ModuleRegistry) Broadcast() (int64, int64) {
 	queue := queue{items: []queueItem{}}
 	queue.Push(queueItem{To: "broadcaster", From: "", Pulse: PulseTypeLow})
-	return r.Send(queue)
+	return r.Send(queue, nil, "", int64(0))
+}
+
+func (r *ModuleRegistry) BroadcastAndTrack(cycles map[string]int64, module string, presses int64) (int64, int64) {
+	queue := queue{items: []queueItem{}}
+	queue.Push(queueItem{To: "broadcaster", From: "", Pulse: PulseTypeLow})
+	return r.Send(queue, cycles, module, presses)
 }
 
 func in(list []string, item string) bool {
@@ -202,6 +214,35 @@ func (m *Module) ToggleState() ModuleState {
 	return m.State
 }
 
+func anyValueSatisfies(m map[string]int64, cond func(v int64) bool) bool {
+	for _, v := range m {
+		if cond(v) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (r *ModuleRegistry) FindCycles(module string) map[string]int64 {
+	inputs := r.FindInputs(module)
+
+	cycles := map[string]int64{}
+	for _, input := range inputs {
+		cycles[input] = 0
+	}
+
+	fmt.Printf("Inputs: %v\n", inputs)
+
+	i := int64(0)
+	for anyValueSatisfies(cycles, func(v int64) bool { return v == 0 }) {
+		i++
+		r.BroadcastAndTrack(cycles, module, i)
+	}
+
+	return cycles
+}
+
 func A(input string) int64 {
 	f, err := os.Open(input)
 	if err != nil {
@@ -220,6 +261,52 @@ func A(input string) int64 {
 
 	fmt.Printf("low=%d, high=%d\n", low, high)
 	return low * high
+}
+
+func B(input string) int64 {
+	f, err := os.Open(input)
+	if err != nil {
+		panic(err)
+	}
+
+	registry := parse(f)
+
+	// From the input, only one conjunction module goes into rx.
+	// Into that conjunction module, only conjunction modules are served as inputs as well.
+	// So we need to find the cycle lengths of all the inputs going into the module going into rx.
+	inputs := registry.FindInputs("rx")
+	if len(inputs) != 1 {
+		panic("more than one input to rx")
+	}
+
+	cycles := registry.FindCycles(inputs[0])
+	fmt.Printf("Cycles: %v\n", cycles)
+
+	values := []int64{}
+	for _, v := range cycles {
+		values = append(values, v)
+	}
+
+	return lcm(values[0], values[1], values[2:]...)
+}
+
+func gcd(a, b int64) int64 {
+	for b != 0 {
+		t := b
+		b = a % b
+		a = t
+	}
+
+	return a
+}
+
+func lcm(a, b int64, integers ...int64) int64 {
+	result := a * b / gcd(a, b)
+	for i := 0; i < len(integers); i++ {
+		result = lcm(result, integers[i])
+	}
+
+	return result
 }
 
 func parse(f *os.File) *ModuleRegistry {

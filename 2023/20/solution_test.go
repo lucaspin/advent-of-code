@@ -11,3 +11,7 @@ func Test__SolutionA(t *testing.T) {
 	require.Equal(t, int64(11687500), A("example2.txt"))
 	require.Equal(t, int64(743090292), A("input.txt"))
 }
+
+func Test__SolutionB(t *testing.T) {
+	require.Equal(t, int64(241528184647003), B("input.txt"))
+}
