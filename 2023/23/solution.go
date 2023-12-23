@@ -2,81 +2,95 @@ package pkg202323
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
-type Location struct {
+type Node struct {
+	ID   string
 	Row  int
 	Col  int
 	Type string
 }
 
-func findStart(locations [][]Location) Location {
-	for _, t := range locations[0] {
-		if t.Type == "." {
-			return t
+type Graph struct {
+	nodes  map[string]Node
+	edges  map[string][]Edge
+	height int
+	width  int
+}
+
+type Edge struct {
+	Destination string
+	Direction   string
+}
+
+func (s *Graph) GetNode(ID string) Node {
+	return s.nodes[ID]
+}
+
+func (s *Graph) GetDestinations(nodeID string) []Edge {
+	return s.edges[nodeID]
+}
+
+func (s *Graph) AddNode(node Node) {
+	if s.nodes == nil {
+		s.nodes = map[string]Node{}
+	}
+
+	s.nodes[node.ID] = node
+}
+
+func (s *Graph) AddDestination(src string, edge Edge) {
+	if s.edges == nil {
+		s.edges = map[string][]Edge{}
+	}
+
+	if _, ok := s.edges[src]; ok {
+		new := append(s.edges[src], edge)
+		s.edges[src] = new
+	} else {
+		s.edges[src] = []Edge{edge}
+	}
+}
+
+func (g *Graph) AllNodes() []string {
+	s := []string{}
+	for k := range g.nodes {
+		s = append(s, k)
+	}
+
+	return s
+}
+
+func (g *Graph) findStart() Node {
+	for i := 0; i < g.width; i++ {
+		n := g.GetNode(nodeID(0, i))
+		if n.Type == "." {
+			return n
 		}
 	}
 
 	panic("should not happen")
 }
 
-func next(locations [][]Location, location Location, part2 bool) []Location {
-	next := []Location{}
-	if location.Row > 0 {
-		up := locations[location.Row-1][location.Col]
-		if !part2 {
-			if up.Type == "." || up.Type == "^" {
-				next = append(next, up)
-			}
-		} else {
-			if up.Type != "#" {
-				next = append(next, up)
-			}
+func (g *Graph) findEnd() Node {
+	for i := 0; i < g.width; i++ {
+		n := g.GetNode(nodeID(g.height-1, i))
+		if n.Type == "." {
+			return n
 		}
 	}
 
-	if location.Col > 0 {
-		left := locations[location.Row][location.Col-1]
-		if !part2 {
-			if left.Type == "." || left.Type == "<" {
-				next = append(next, left)
-			}
-		} else {
-			if left.Type != "#" {
-				next = append(next, left)
-			}
-		}
-	}
+	panic("should not happen")
+}
 
-	if location.Row < len(locations)-1 {
-		down := locations[location.Row+1][location.Col]
-		if !part2 {
-			if down.Type == "." || down.Type == "v" {
-				next = append(next, down)
-			}
-		} else {
-			if down.Type != "#" {
-				next = append(next, down)
-			}
-		}
-	}
-
-	if location.Col < len(locations[location.Row])-1 {
-		right := locations[location.Row][location.Col+1]
-		if !part2 {
-			if right.Type == "." || right.Type == ">" {
-				next = append(next, right)
-			}
-		} else {
-			if right.Type != "#" {
-				next = append(next, right)
-			}
-		}
-	}
-
-	return next
+type Location struct {
+	Row  int
+	Col  int
+	Type string
 }
 
 type queue struct {
@@ -98,28 +112,27 @@ func (q *queue) Len() int {
 }
 
 type queueItem struct {
-	Location Location
-	seen     LocationSet
-	path     []Location
+	node Node
+	seen NodeSet
 }
 
-type LocationSet map[Location]bool
+type NodeSet map[Node]bool
 
-func (n *LocationSet) Has(v Location) bool {
+func (n *NodeSet) Has(v Node) bool {
 	_, ok := (*n)[v]
 	return ok
 }
 
-func (n *LocationSet) Add(v Location) {
+func (n *NodeSet) Add(v Node) {
 	(*n)[v] = true
 }
 
-func (n *LocationSet) Len() int {
+func (n *NodeSet) Len() int {
 	return len(*n)
 }
 
-func (n *LocationSet) Values() []Location {
-	ls := []Location{}
+func (n *NodeSet) Values() []Node {
+	ls := []Node{}
 	for k := range *n {
 		ls = append(ls, k)
 	}
@@ -127,8 +140,8 @@ func (n *LocationSet) Values() []Location {
 	return ls
 }
 
-func (n *LocationSet) Copy() LocationSet {
-	new := make(map[Location]bool, len(*n))
+func (n *NodeSet) Copy() NodeSet {
+	new := make(map[Node]bool, len(*n))
 	for k, v := range *n {
 		new[k] = v
 	}
@@ -136,38 +149,36 @@ func (n *LocationSet) Copy() LocationSet {
 	return new
 }
 
-func _search(locations [][]Location, queue queue, part2 bool) [][]Location {
-	paths := [][]Location{}
+func _search(graph Graph, queue queue, target Node) []int {
+	paths := []int{}
+
 	for queue.Len() > 0 {
 		current := queue.Pop()
 
 		// Reached bottom row
-		if current.Location.Row == len(locations)-1 {
-			paths = append(paths, current.path)
+		if current.node == target {
+			paths = append(paths, current.seen.Len()-1)
 			continue
 		}
 
-		next := next(locations, current.Location, part2)
+		next := graph.GetDestinations(current.node.ID)
 		if len(next) == 0 {
 			continue
 		}
 
 		for _, n := range next {
-			if current.seen.Has(n) {
+			dst := graph.GetNode(n.Destination)
+			if current.seen.Has(dst) {
+				fmt.Printf("")
 				continue
 			}
 
 			newSeen := current.seen.Copy()
-			newSeen.Add(n)
-
-			newPath := make([]Location, len(current.path))
-			copy(newPath, current.path)
-			newPath = append(newPath, n)
+			newSeen.Add(dst)
 
 			queue.Push(queueItem{
-				Location: n,
-				seen:     newSeen,
-				path:     newPath,
+				node: dst,
+				seen: newSeen,
 			})
 		}
 	}
@@ -175,24 +186,20 @@ func _search(locations [][]Location, queue queue, part2 bool) [][]Location {
 	return paths
 }
 
-func longest(locations [][]Location, part2 bool) int {
-	start := findStart(locations)
-	seen := LocationSet{}
+func longest(graph Graph) int {
+	start := graph.findStart()
+	end := graph.findEnd()
+
+	seen := NodeSet{}
 	seen.Add(start)
 
 	queue := queue{}
 	queue.Push(queueItem{
-		Location: start,
-		seen:     seen,
-		path:     []Location{},
+		node: start,
+		seen: seen,
 	})
 
-	lengths := []int{}
-	for _, p := range _search(locations, queue, part2) {
-		lengths = append(lengths, len(p))
-	}
-
-	return max(lengths)
+	return max(_search(graph, queue, end))
 }
 
 func max(list []int) int {
@@ -206,14 +213,109 @@ func max(list []int) int {
 	return max
 }
 
+func (g *Graph) Condense() {
+	// end := g.findEnd()
+	// current := g.findStart()
+
+	// for current != end {
+	// 	g.GetDestinations()
+	// }
+}
+
 func A(input string) int {
 	f, err := os.Open(input)
 	if err != nil {
 		panic(err)
 	}
 
+	now := time.Now()
 	locations := parse(f)
-	return longest(locations, false)
+	fmt.Printf("Parsed locations in %v\n", time.Since(now))
+
+	now = time.Now()
+	graph := buildGraph(locations, false)
+	fmt.Printf("Built graph in %v\n", time.Since(now))
+
+	now = time.Now()
+	graph.Condense()
+	fmt.Printf("Condensed graph in %v\n", time.Since(now))
+
+	now = time.Now()
+	longest := longest(graph)
+	fmt.Printf("Found longest in %v\n", time.Since(now))
+
+	return longest
+}
+
+func buildGraph(locations [][]Location, part2 bool) Graph {
+	graph := Graph{
+		height: len(locations),
+		width:  len(locations[0]),
+	}
+
+	for row := 0; row < len(locations); row++ {
+		for col := 0; col < len(locations[row]); col++ {
+			c := locations[row][col]
+			node := Node{
+				ID:   nodeID(row, col),
+				Row:  row,
+				Col:  col,
+				Type: c.Type,
+			}
+
+			graph.AddNode(node)
+			for _, c := range connections(locations, row, col, part2) {
+				graph.AddDestination(node.ID, c)
+			}
+		}
+	}
+
+	return graph
+}
+
+func nodeID(row, col int) string {
+	return fmt.Sprintf("row=%d;col=%d", row, col)
+}
+
+func connections(locations [][]Location, row, col int, part2 bool) []Edge {
+	conns := []Edge{}
+	if row > 0 {
+		up := locations[row-1][col]
+		if !part2 && (up.Type == "." || up.Type == "^") {
+			conns = append(conns, Edge{Destination: nodeID(up.Row, up.Col), Direction: "up"})
+		} else if part2 && up.Type != "#" {
+			conns = append(conns, Edge{Destination: nodeID(up.Row, up.Col), Direction: "up"})
+		}
+	}
+
+	if row < len(locations)-1 {
+		down := locations[row+1][col]
+		if !part2 && (down.Type == "." || down.Type == "v") {
+			conns = append(conns, Edge{Destination: nodeID(down.Row, down.Col), Direction: "down"})
+		} else if part2 && down.Type != "#" {
+			conns = append(conns, Edge{Destination: nodeID(down.Row, down.Col), Direction: "down"})
+		}
+	}
+
+	if col < len(locations[row])-1 {
+		right := locations[row][col+1]
+		if !part2 && (right.Type == "." || right.Type == ">") {
+			conns = append(conns, Edge{Destination: nodeID(right.Row, right.Col), Direction: "right"})
+		} else if part2 && right.Type != "#" {
+			conns = append(conns, Edge{Destination: nodeID(right.Row, right.Col), Direction: "right"})
+		}
+	}
+
+	if col > 0 {
+		left := locations[row][col-1]
+		if !part2 && (left.Type == "." || left.Type == "<") {
+			conns = append(conns, Edge{Destination: nodeID(left.Row, left.Col), Direction: "left"})
+		} else if part2 && left.Type != "#" {
+			conns = append(conns, Edge{Destination: nodeID(left.Row, left.Col), Direction: "left"})
+		}
+	}
+
+	return conns
 }
 
 func B(input string) int {
@@ -222,8 +324,22 @@ func B(input string) int {
 		panic(err)
 	}
 
+	now := time.Now()
 	locations := parse(f)
-	return longest(locations, true)
+	fmt.Printf("Parsed locations in %v\n", time.Since(now))
+
+	now = time.Now()
+	graph := buildGraph(locations, true)
+	fmt.Printf("Built graph in %v\n", time.Since(now))
+
+	now = time.Now()
+	graph.Condense()
+	fmt.Printf("Condensed graph in %v\n", time.Since(now))
+
+	now = time.Now()
+	longest := longest(graph)
+	fmt.Printf("Found longest in %v\n", time.Since(now))
+	return longest
 }
 
 func parse(f *os.File) [][]Location {
