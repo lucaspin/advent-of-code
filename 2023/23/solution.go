@@ -2,95 +2,128 @@ package pkg202323
 
 import (
 	"bufio"
-	"fmt"
 	"os"
+	"sort"
 	"strings"
-	"time"
 )
-
-type Node struct {
-	ID   string
-	Row  int
-	Col  int
-	Type string
-}
-
-type Graph struct {
-	nodes  map[string]Node
-	edges  map[string][]Edge
-	height int
-	width  int
-}
-
-type Edge struct {
-	Destination string
-	Direction   string
-}
-
-func (s *Graph) GetNode(ID string) Node {
-	return s.nodes[ID]
-}
-
-func (s *Graph) GetDestinations(nodeID string) []Edge {
-	return s.edges[nodeID]
-}
-
-func (s *Graph) AddNode(node Node) {
-	if s.nodes == nil {
-		s.nodes = map[string]Node{}
-	}
-
-	s.nodes[node.ID] = node
-}
-
-func (s *Graph) AddDestination(src string, edge Edge) {
-	if s.edges == nil {
-		s.edges = map[string][]Edge{}
-	}
-
-	if _, ok := s.edges[src]; ok {
-		new := append(s.edges[src], edge)
-		s.edges[src] = new
-	} else {
-		s.edges[src] = []Edge{edge}
-	}
-}
-
-func (g *Graph) AllNodes() []string {
-	s := []string{}
-	for k := range g.nodes {
-		s = append(s, k)
-	}
-
-	return s
-}
-
-func (g *Graph) findStart() Node {
-	for i := 0; i < g.width; i++ {
-		n := g.GetNode(nodeID(0, i))
-		if n.Type == "." {
-			return n
-		}
-	}
-
-	panic("should not happen")
-}
-
-func (g *Graph) findEnd() Node {
-	for i := 0; i < g.width; i++ {
-		n := g.GetNode(nodeID(g.height-1, i))
-		if n.Type == "." {
-			return n
-		}
-	}
-
-	panic("should not happen")
-}
 
 type Location struct {
 	Row  int
 	Col  int
 	Type string
+}
+
+func findStart(locations [][]Location) Point {
+	for _, c := range locations[0] {
+		if c.Type == "." {
+			return Point{Row: c.Row, Col: c.Col}
+		}
+	}
+
+	panic("asdasds")
+}
+
+func findEnd(locations [][]Location) Point {
+	for _, c := range locations[len(locations)-1] {
+		if c.Type == "." {
+			return Point{Row: c.Row, Col: c.Col}
+		}
+	}
+
+	panic("asdasds")
+}
+
+func A(input string) int {
+	f, err := os.Open(input)
+	if err != nil {
+		panic(err)
+	}
+
+	locations := parse(f)
+	graph := buildGraph(locations, false)
+	return graph.Longest(findStart(locations), findEnd(locations))
+}
+
+func B(input string) int {
+	f, err := os.Open(input)
+	if err != nil {
+		panic(err)
+	}
+
+	locations := parse(f)
+	graph := buildGraph(locations, true)
+	graph.Simplify()
+	return graph.Longest(findStart(locations), findEnd(locations))
+}
+
+type Point struct {
+	Row int
+	Col int
+}
+
+type Dest struct {
+	p Point
+	d int
+}
+
+type NewGraph map[Point][]Dest
+
+func (g *NewGraph) Add(p Point, dest []Dest) {
+	(*g)[p] = dest
+}
+
+func (g *NewGraph) AddDest(p Point, dest Dest) {
+	(*g)[p] = append((*g)[p], dest)
+}
+
+func (g *NewGraph) Simplify() {
+	points := make([]Point, 0)
+	for k := range *g {
+		points = append(points, k)
+	}
+
+	sort.Slice(points, func(i, j int) bool {
+		return points[i].Row < points[j].Row
+	})
+
+	for _, k := range points {
+		v := (*g)[k]
+		if len(v) == 2 {
+			a := v[0]
+			b := v[1]
+			g.remove(a.p, k)
+			g.remove(b.p, k)
+			g.AddDest(a.p, Dest{p: b.p, d: a.d + b.d})
+			g.AddDest(b.p, Dest{p: a.p, d: a.d + b.d})
+			delete(*g, k)
+		}
+	}
+}
+
+func (g *NewGraph) remove(a, b Point) {
+	new := []Dest{}
+	for _, d := range (*g)[a] {
+		if d.p != b {
+			new = append(new, d)
+		}
+	}
+
+	(*g)[a] = new
+}
+
+func buildGraph(locations [][]Location, part2 bool) *NewGraph {
+	graph := NewGraph{}
+
+	for row := 0; row < len(locations); row++ {
+		for col := 0; col < len(locations[row]); col++ {
+			c := locations[row][col]
+			if c.Type != "#" {
+				graph.Add(Point{Row: row, Col: col}, connections(locations, row, col, part2))
+			}
+		}
+	}
+
+	return &graph
 }
 
 type queue struct {
@@ -112,27 +145,32 @@ func (q *queue) Len() int {
 }
 
 type queueItem struct {
-	node Node
-	seen NodeSet
+	p    Point
+	d    int
+	seen PointSet
 }
 
-type NodeSet map[Node]bool
+type PointSet map[Point]bool
 
-func (n *NodeSet) Has(v Node) bool {
+func (n *PointSet) Has(v Point) bool {
 	_, ok := (*n)[v]
 	return ok
 }
 
-func (n *NodeSet) Add(v Node) {
+func (n *PointSet) Remove(v Point) {
+	delete(*n, v)
+}
+
+func (n *PointSet) Add(v Point) {
 	(*n)[v] = true
 }
 
-func (n *NodeSet) Len() int {
+func (n *PointSet) Len() int {
 	return len(*n)
 }
 
-func (n *NodeSet) Values() []Node {
-	ls := []Node{}
+func (n *PointSet) Values() []Point {
+	ls := []Point{}
 	for k := range *n {
 		ls = append(ls, k)
 	}
@@ -140,8 +178,8 @@ func (n *NodeSet) Values() []Node {
 	return ls
 }
 
-func (n *NodeSet) Copy() NodeSet {
-	new := make(map[Node]bool, len(*n))
+func (n *PointSet) Copy() PointSet {
+	new := make(map[Point]bool, len(*n))
 	for k, v := range *n {
 		new[k] = v
 	}
@@ -149,197 +187,84 @@ func (n *NodeSet) Copy() NodeSet {
 	return new
 }
 
-func _search(graph Graph, queue queue, target Node) []int {
-	paths := []int{}
-
+func (g *NewGraph) Search(queue queue, target Point) int {
+	maximum := 0
 	for queue.Len() > 0 {
-		current := queue.Pop()
+		i := queue.Pop()
 
-		// Reached bottom row
-		if current.node == target {
-			paths = append(paths, current.seen.Len()-1)
+		if i.p == target {
+			maximum = max(maximum, i.d)
 			continue
 		}
 
-		next := graph.GetDestinations(current.node.ID)
-		if len(next) == 0 {
-			continue
-		}
-
-		for _, n := range next {
-			dst := graph.GetNode(n.Destination)
-			if current.seen.Has(dst) {
-				fmt.Printf("")
+		for _, d := range (*g)[i.p] {
+			if i.seen.Has(d.p) {
 				continue
 			}
 
-			newSeen := current.seen.Copy()
-			newSeen.Add(dst)
-
+			seen := i.seen.Copy()
+			seen.Add(i.p)
 			queue.Push(queueItem{
-				node: dst,
-				seen: newSeen,
+				p:    d.p,
+				d:    i.d + d.d,
+				seen: seen,
 			})
 		}
 	}
 
-	return paths
+	return maximum
 }
 
-func longest(graph Graph) int {
-	start := graph.findStart()
-	end := graph.findEnd()
-
-	seen := NodeSet{}
-	seen.Add(start)
-
+func (g *NewGraph) Longest(start, end Point) int {
 	queue := queue{}
 	queue.Push(queueItem{
-		node: start,
-		seen: seen,
+		p:    start,
+		d:    0,
+		seen: PointSet{},
 	})
 
-	return max(_search(graph, queue, end))
+	return g.Search(queue, end)
 }
 
-func max(list []int) int {
-	max := 0
-	for _, i := range list {
-		if i > max {
-			max = i
-		}
-	}
-
-	return max
-}
-
-func (g *Graph) Condense() {
-	// end := g.findEnd()
-	// current := g.findStart()
-
-	// for current != end {
-	// 	g.GetDestinations()
-	// }
-}
-
-func A(input string) int {
-	f, err := os.Open(input)
-	if err != nil {
-		panic(err)
-	}
-
-	now := time.Now()
-	locations := parse(f)
-	fmt.Printf("Parsed locations in %v\n", time.Since(now))
-
-	now = time.Now()
-	graph := buildGraph(locations, false)
-	fmt.Printf("Built graph in %v\n", time.Since(now))
-
-	now = time.Now()
-	graph.Condense()
-	fmt.Printf("Condensed graph in %v\n", time.Since(now))
-
-	now = time.Now()
-	longest := longest(graph)
-	fmt.Printf("Found longest in %v\n", time.Since(now))
-
-	return longest
-}
-
-func buildGraph(locations [][]Location, part2 bool) Graph {
-	graph := Graph{
-		height: len(locations),
-		width:  len(locations[0]),
-	}
-
-	for row := 0; row < len(locations); row++ {
-		for col := 0; col < len(locations[row]); col++ {
-			c := locations[row][col]
-			node := Node{
-				ID:   nodeID(row, col),
-				Row:  row,
-				Col:  col,
-				Type: c.Type,
-			}
-
-			graph.AddNode(node)
-			for _, c := range connections(locations, row, col, part2) {
-				graph.AddDestination(node.ID, c)
-			}
-		}
-	}
-
-	return graph
-}
-
-func nodeID(row, col int) string {
-	return fmt.Sprintf("row=%d;col=%d", row, col)
-}
-
-func connections(locations [][]Location, row, col int, part2 bool) []Edge {
-	conns := []Edge{}
+func connections(locations [][]Location, row, col int, part2 bool) []Dest {
+	conns := []Dest{}
 	if row > 0 {
 		up := locations[row-1][col]
 		if !part2 && (up.Type == "." || up.Type == "^") {
-			conns = append(conns, Edge{Destination: nodeID(up.Row, up.Col), Direction: "up"})
+			conns = append(conns, Dest{p: Point{Row: up.Row, Col: up.Col}, d: 1})
 		} else if part2 && up.Type != "#" {
-			conns = append(conns, Edge{Destination: nodeID(up.Row, up.Col), Direction: "up"})
+			conns = append(conns, Dest{p: Point{Row: up.Row, Col: up.Col}, d: 1})
 		}
 	}
 
 	if row < len(locations)-1 {
 		down := locations[row+1][col]
 		if !part2 && (down.Type == "." || down.Type == "v") {
-			conns = append(conns, Edge{Destination: nodeID(down.Row, down.Col), Direction: "down"})
+			conns = append(conns, Dest{p: Point{Row: down.Row, Col: down.Col}, d: 1})
 		} else if part2 && down.Type != "#" {
-			conns = append(conns, Edge{Destination: nodeID(down.Row, down.Col), Direction: "down"})
+			conns = append(conns, Dest{p: Point{Row: down.Row, Col: down.Col}, d: 1})
 		}
 	}
 
 	if col < len(locations[row])-1 {
 		right := locations[row][col+1]
 		if !part2 && (right.Type == "." || right.Type == ">") {
-			conns = append(conns, Edge{Destination: nodeID(right.Row, right.Col), Direction: "right"})
+			conns = append(conns, Dest{p: Point{Row: right.Row, Col: right.Col}, d: 1})
 		} else if part2 && right.Type != "#" {
-			conns = append(conns, Edge{Destination: nodeID(right.Row, right.Col), Direction: "right"})
+			conns = append(conns, Dest{p: Point{Row: right.Row, Col: right.Col}, d: 1})
 		}
 	}
 
 	if col > 0 {
 		left := locations[row][col-1]
 		if !part2 && (left.Type == "." || left.Type == "<") {
-			conns = append(conns, Edge{Destination: nodeID(left.Row, left.Col), Direction: "left"})
+			conns = append(conns, Dest{p: Point{Row: left.Row, Col: left.Col}, d: 1})
 		} else if part2 && left.Type != "#" {
-			conns = append(conns, Edge{Destination: nodeID(left.Row, left.Col), Direction: "left"})
+			conns = append(conns, Dest{p: Point{Row: left.Row, Col: left.Col}, d: 1})
 		}
 	}
 
 	return conns
-}
-
-func B(input string) int {
-	f, err := os.Open(input)
-	if err != nil {
-		panic(err)
-	}
-
-	now := time.Now()
-	locations := parse(f)
-	fmt.Printf("Parsed locations in %v\n", time.Since(now))
-
-	now = time.Now()
-	graph := buildGraph(locations, true)
-	fmt.Printf("Built graph in %v\n", time.Since(now))
-
-	now = time.Now()
-	graph.Condense()
-	fmt.Printf("Condensed graph in %v\n", time.Since(now))
-
-	now = time.Now()
-	longest := longest(graph)
-	fmt.Printf("Found longest in %v\n", time.Since(now))
-	return longest
 }
 
 func parse(f *os.File) [][]Location {
