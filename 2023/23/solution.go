@@ -66,17 +66,17 @@ type Dest struct {
 	d int
 }
 
-type NewGraph map[Point][]Dest
+type Graph map[Point][]Dest
 
-func (g *NewGraph) Add(p Point, dest []Dest) {
+func (g *Graph) Add(p Point, dest []Dest) {
 	(*g)[p] = dest
 }
 
-func (g *NewGraph) AddDest(p Point, dest Dest) {
+func (g *Graph) AddDest(p Point, dest Dest) {
 	(*g)[p] = append((*g)[p], dest)
 }
 
-func (g *NewGraph) Simplify() {
+func (g *Graph) Simplify() {
 	points := make([]Point, 0)
 	for k := range *g {
 		points = append(points, k)
@@ -100,7 +100,7 @@ func (g *NewGraph) Simplify() {
 	}
 }
 
-func (g *NewGraph) remove(a, b Point) {
+func (g *Graph) remove(a, b Point) {
 	new := []Dest{}
 	for _, d := range (*g)[a] {
 		if d.p != b {
@@ -111,8 +111,8 @@ func (g *NewGraph) remove(a, b Point) {
 	(*g)[a] = new
 }
 
-func buildGraph(locations [][]Location, part2 bool) *NewGraph {
-	graph := NewGraph{}
+func buildGraph(locations [][]Location, part2 bool) *Graph {
+	graph := Graph{}
 
 	for row := 0; row < len(locations); row++ {
 		for col := 0; col < len(locations[row]); col++ {
@@ -126,28 +126,27 @@ func buildGraph(locations [][]Location, part2 bool) *NewGraph {
 	return &graph
 }
 
-type queue struct {
-	items []queueItem
+type stack struct {
+	items []stackItem
 }
 
-func (q *queue) Push(item queueItem) {
+func (q *stack) Push(item stackItem) {
 	q.items = append(q.items, item)
 }
 
-func (q *queue) Pop() queueItem {
-	head := q.items[0]
-	q.items = q.items[1:]
+func (q *stack) Pop() stackItem {
+	head := q.items[len(q.items)-1]
+	q.items = q.items[0 : len(q.items)-1]
 	return head
 }
 
-func (q *queue) Len() int {
+func (q *stack) Len() int {
 	return len(q.items)
 }
 
-type queueItem struct {
-	p    Point
-	d    int
-	seen PointSet
+type stackItem struct {
+	p Point
+	d int
 }
 
 type PointSet map[Point]bool
@@ -187,27 +186,34 @@ func (n *PointSet) Copy() PointSet {
 	return new
 }
 
-func (g *NewGraph) Search(queue queue, target Point) int {
+func (g *Graph) Search(stack stack, target Point) int {
+	seen := PointSet{}
 	maximum := 0
-	for queue.Len() > 0 {
-		i := queue.Pop()
+	for stack.Len() > 0 {
+		i := stack.Pop()
+
+		if i.d == -1 {
+			seen.Remove(i.p)
+			continue
+		}
 
 		if i.p == target {
 			maximum = max(maximum, i.d)
 			continue
 		}
 
+		stack.Push(stackItem{p: i.p, d: -1})
+		seen.Add(i.p)
+
 		for _, d := range (*g)[i.p] {
-			if i.seen.Has(d.p) {
+			if seen.Has(d.p) {
 				continue
 			}
 
-			seen := i.seen.Copy()
 			seen.Add(i.p)
-			queue.Push(queueItem{
-				p:    d.p,
-				d:    i.d + d.d,
-				seen: seen,
+			stack.Push(stackItem{
+				p: d.p,
+				d: i.d + d.d,
 			})
 		}
 	}
@@ -215,12 +221,11 @@ func (g *NewGraph) Search(queue queue, target Point) int {
 	return maximum
 }
 
-func (g *NewGraph) Longest(start, end Point) int {
-	queue := queue{}
-	queue.Push(queueItem{
-		p:    start,
-		d:    0,
-		seen: PointSet{},
+func (g *Graph) Longest(start, end Point) int {
+	queue := stack{}
+	queue.Push(stackItem{
+		p: start,
+		d: 0,
 	})
 
 	return g.Search(queue, end)

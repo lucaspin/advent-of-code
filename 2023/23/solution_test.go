@@ -11,7 +11,6 @@ func Test__SolutionA(t *testing.T) {
 	require.Equal(t, 2206, A("input.txt"))
 }
 
-// NOTE: this takes ~1m to run :(
 func Test__SolutionTryB(t *testing.T) {
 	require.Equal(t, 154, B("example.txt"))
 	require.Equal(t, 6490, B("input.txt"))
